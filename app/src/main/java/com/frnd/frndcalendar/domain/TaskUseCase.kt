@@ -21,10 +21,10 @@ class TaskUseCase @Inject constructor(
     suspend fun deleteTaskFromLocal(taskId: Int) = taskRepository.deleteTask(taskId)
     suspend fun insertSingleTaskIntoLocal(task: TaskEntity) = taskRepository.insertSingleTask(task)
 
-    suspend fun insertTasksIntoLocal(tasks: List<TaskEntity>) =taskRepository.insertTasks(tasks)
+    suspend fun insertTasksIntoLocal(tasks: List<TaskEntity>) = taskRepository.insertTasks(tasks)
 
     fun getAllTaskForParticularDate(date: String) = taskRepository.getAllTaskForParticularDate(date)
 
-     suspend fun getAllTaskForParticularMonth(monthYear: String) = taskRepository.getAllTaskForParticularMonth(monthYear)
+    suspend fun getAllTaskForParticularMonth(monthYear: String) = taskRepository.getAllTaskForParticularMonth(monthYear)
 
 }
