@@ -7,7 +7,7 @@ import com.frnd.frndcalendar.remote.model.StoreTaskRequest
 import retrofit2.Response
 
 interface TaskRemoteRepository {
-    suspend fun storeCalendarTask(request: StoreTaskRequest): Response<Any>
-    suspend fun deleteCalendarTask(request: DeleteTaskRequest): Response<Any>
-    suspend fun getCalendarTaskList(request: GetTasksRequest): Response<GetUserTaskResBody>
+    suspend fun storeCalendarTask(request: StoreTaskRequest): Any
+    suspend fun deleteCalendarTask(request: DeleteTaskRequest): Any
+    suspend fun getCalendarTaskList(request: GetTasksRequest): GetUserTaskResBody
 }

@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.frnd.frndcalendar.remote.ApiService
 import com.frnd.frndcalendar.BuildConfig
 import com.frnd.frndcalendar.constant.Metadata.Companion.BASE_URL
+import com.frnd.frndcalendar.constant.Metadata.Companion.BASE_URL_NO_HTTPS
 import com.frnd.frndcalendar.storage.AppDatabase
 import com.frnd.frndcalendar.storage.dao.TaskDao
 import com.frnd.frndcalendar.storage.repository.TaskLocalRepository
@@ -25,9 +26,11 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object AppModule {
 
+    //based upon http and https bcz sometimes http works and sometimes https
     @Provides
-    fun provideBaseUrl(): String =BASE_URL
-
+    fun provideBaseUrl(): String = BASE_URL_NO_HTTPS
+    //for base url no https=BASE_URL_NO_HTTPS
+    //for base url with https=BASE_URL
 
     @Singleton
     @Provides

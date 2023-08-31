@@ -21,11 +21,13 @@ import com.frnd.frndcalendar.storage.dto.TaskEntity
 import com.frnd.frndcalendar.utility.CalendarUtils.Companion.generateCustomDateFormat
 import com.frnd.frndcalendar.utility.CalendarUtils.Companion.isSameDate
 import com.frnd.frndcalendar.utility.CalendarUtils.Companion.monthAbbreviations
+import com.frnd.frndcalendar.utility.ResultWrapper
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import java.util.Calendar
 import javax.inject.Inject
 
@@ -63,12 +65,14 @@ class CalendarViewModel @Inject constructor(
     }
 
     internal fun generateCalendarDays(event: Event) = viewModelScope.launch(Dispatchers.IO) {
-        calendarUseCase.getYearAndMonth(event, defaultYear, defaultMonth).apply {
-            defaultMonth = this.currentMonth
-            defaultYear = this.currentYear
-            latestCalendarDayCache = calendarUseCase.generateCalendarDays(year = defaultYear, month = defaultMonth, SelectedDateModel(selectedDate, selectedMonth, selectedYear))
-            updateCalendarWithTaskCount(false)
-            getTaskForParticularDate(generateCustomDateFormat(selectedDate, defaultMonth, defaultYear))
+        supervisorScope {
+            calendarUseCase.getYearAndMonth(event, defaultYear, defaultMonth).apply {
+                defaultMonth = this.currentMonth
+                defaultYear = this.currentYear
+                latestCalendarDayCache = calendarUseCase.generateCalendarDays(year = defaultYear, month = defaultMonth, SelectedDateModel(selectedDate, selectedMonth, selectedYear))
+                updateCalendarWithTaskCount(false)
+                getTaskForParticularDate(generateCustomDateFormat(selectedDate, defaultMonth, defaultYear))
+            }
         }
     }
 
@@ -76,58 +80,56 @@ class CalendarViewModel @Inject constructor(
     internal fun createTaskAtServerAndUpdateLocal(title: String, description: String) = viewModelScope.launch(Dispatchers.IO) {
         _userTasksUiState.postValue(TaskUiState.Empty(true))
         val inputData = StoreTaskRequest(USER_ID, Task(title, description))
-        val response = taskUseCase.storeCalendarTask(inputData)
-        if (response.isSuccessful) {
-            response.body()?.let {
+        when (taskUseCase.storeCalendarTask(inputData)) {
+            is ResultWrapper.Success -> {
                 getCalendarTaskList(true)
-            } ?: run {
-                _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
             }
-        } else {
-            _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
+
+            else -> {
+                _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
+
+            }
         }
     }
 
 
     internal fun deleteTaskAtServerAndLocal(taskId: Int) = viewModelScope.launch(Dispatchers.IO) {
         _userTasksUiState.postValue(TaskUiState.Empty(true))
-        val response = taskUseCase.deleteCalendarTask(DeleteTaskRequest(USER_ID, taskId))
-        if (response.isSuccessful) {
-            response.body()?.let {
+        when(taskUseCase.deleteCalendarTask(DeleteTaskRequest(USER_ID, taskId))){
+            is ResultWrapper.Success -> {
                 taskUseCase.deleteTaskFromLocal(taskId)
-            } ?: run {
-                _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
             }
-        } else {
-            _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
+            else -> {
+                _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
+
+            }
         }
     }
 
     //isNewlyCreated if true then recently added task and need to sync with local db
     //generally it will be last one
     private fun getCalendarTaskList(isNewlyCreated: Boolean) = viewModelScope.launch(Dispatchers.IO) {
-        val response = taskUseCase.getCalendarTaskList(GetTasksRequest(USER_ID))
-        if (response.isSuccessful) {
-            response.body()?.tasks?.let {
+        when (val response = taskUseCase.getCalendarTaskList(GetTasksRequest(USER_ID))) {
+            is ResultWrapper.Success -> {
                 if (isNewlyCreated) {
-                    val recentCreatedTask = it.last()
-                    taskUseCase.insertSingleTaskIntoLocal(TaskEntity(taskId = recentCreatedTask.task_id,
+                    val recentCreatedTask = response.value.tasks?.last()
+                    taskUseCase.insertSingleTaskIntoLocal(TaskEntity(taskId = recentCreatedTask!!.task_id,
                         title = recentCreatedTask.task_detail?.title ?: "",
                         description = recentCreatedTask.task_detail?.description ?: "",
                         date = generateCustomDateFormat(selectedDate, selectedMonth, selectedYear)))
                 } else {
-                    taskUseCase.insertTasksIntoLocal(it.map { data ->
+                    taskUseCase.insertTasksIntoLocal(response.value.tasks!!.map { data ->
                         TaskEntity(taskId = data.task_id,
                             title = data.task_detail?.title ?: "",
                             description = data.task_detail?.description ?: "",
                             date = generateCustomDateFormat(defaultDate, defaultMonth, defaultYear))
                     })
                 }
-            } ?: run {
+            }
+
+            else -> {
                 _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
             }
-        } else {
-            _userTasksUiState.postValue(TaskUiState.Error(false, "Something went wrong"))
         }
     }
 
@@ -136,25 +138,27 @@ class CalendarViewModel @Inject constructor(
     }
 
     internal fun updateCalendarBasedOnDateSelection(calendarDay: CalendarDay) = viewModelScope.launch(Dispatchers.IO) {
-        if (calendarDay.year != "" && calendarDay.month != "" && calendarDay.dayOfMonth != "") {
-            selectedYear = calendarDay.year.toInt()
-            selectedMonth = calendarDay.month.toInt()
-            selectedDate = calendarDay.dayOfMonth.toInt()
-            val selectedDateModel = SelectedDateModel(selectedDate, selectedMonth, selectedYear)
-            latestCalendarDayCache = latestCalendarDayCache?.map {
-                if (it.dayOfMonth != "" && it.month != "" && it.year != "") {
-                    it.copy(isSelected = isSameDate(
-                        selectedDateModel,
-                        it.dayOfMonth.toInt(),
-                        it.month.toInt(),
-                        it.year.toInt()
-                    ))
-                } else {
-                    it.copy(isSelected = false)
+        supervisorScope {
+            if (calendarDay.year != "" && calendarDay.month != "" && calendarDay.dayOfMonth != "") {
+                selectedYear = calendarDay.year.toInt()
+                selectedMonth = calendarDay.month.toInt()
+                selectedDate = calendarDay.dayOfMonth.toInt()
+                val selectedDateModel = SelectedDateModel(selectedDate, selectedMonth, selectedYear)
+                latestCalendarDayCache = latestCalendarDayCache?.map {
+                    if (it.dayOfMonth != "" && it.month != "" && it.year != "") {
+                        it.copy(isSelected = isSameDate(
+                            selectedDateModel,
+                            it.dayOfMonth.toInt(),
+                            it.month.toInt(),
+                            it.year.toInt()
+                        ))
+                    } else {
+                        it.copy(isSelected = false)
+                    }
                 }
+                updateCalendarWithTaskCount(false)
+                getTaskForParticularDate(date = generateCustomDateFormat(selectedDate, selectedMonth, selectedYear))
             }
-            updateCalendarWithTaskCount(false)
-            getTaskForParticularDate(date = generateCustomDateFormat(selectedDate, selectedMonth, selectedYear))
         }
     }
 
@@ -170,7 +174,7 @@ class CalendarViewModel @Inject constructor(
         }
     }
 
-    private suspend fun updateCalendarWithTaskCount(canByPassCalendarWithEvent: Boolean) {
+    private suspend fun updateCalendarWithTaskCount(canByPassCalendarWithEvent: Boolean) = viewModelScope.launch(Dispatchers.IO) {
         if (canByPassCalendarWithEvent) {
             latestCalendarDayCache?.let {
                 _calendarDays.postValue(it)

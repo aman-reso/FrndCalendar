@@ -11,11 +11,11 @@ import retrofit2.http.POST
 
 interface ApiService {
     @POST("api/storeCalendarTask")
-    suspend fun storeCalendarTask(@Body request: StoreTaskRequest): Response<Any>
+    suspend fun storeCalendarTask(@Body request: StoreTaskRequest): Any
 
     @POST("api/deleteCalendarTask")
-    suspend fun deleteCalendarTask(@Body request: DeleteTaskRequest): Response<Any>
+    suspend fun deleteCalendarTask(@Body request: DeleteTaskRequest): Any
 
     @POST("api/getCalendarTaskList")
-    suspend fun getCalendarTaskList(@Body request: GetTasksRequest): Response<GetUserTaskResBody>
+    suspend fun getCalendarTaskList(@Body request: GetTasksRequest): GetUserTaskResBody
 }
